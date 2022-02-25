@@ -1,0 +1,70 @@
+---
+Parameters:
+    SSHKey:
+      Type: AWS::EC2::KeyPair::KeyName
+      Description: Name of an existing EC2 Keypair to enable SSH to the instance
+
+Resources:
+    MyInstance:
+      Type: AWS::EC2::Instance
+      Properties:
+        AvailabilityZone: us-east-1a
+        ImageId: ami-033b95fb8079dc481
+        InstanceType: t2.micro
+        SecurityGroups:
+          - !Ref SSHSecurityGroup
+        #Install web servcie 
+        UserData:
+          Fn::Base64: 
+            !Sub |
+              #!/bin/bash
+              # get the latest cloudformation pkg
+              yum update -y aws-cfn-bootstrap
+              #start cfn-init
+              /opt/aws/bin/cfn-init -s ${AWS::StackId} -r MyInstance --region ${AWS::Region} ||
+              error_exit 'Failed to run cfn-init'  
+      Metadata:
+        Comment: Install a Apache Http page
+        AWS::CloudFormation::Init:
+          config:
+            package:
+              yum:
+                httpd: []
+              files:
+                "/var/www/html/index.html":
+                  content: |
+                    <h1>Hello World from EC2 instance!<h1>
+                    <p>this was created using cfn-init</p>
+                  mode: "000644"
+              commands:
+                hello:
+                  command: "echo 'hellow world'"
+              services:
+                sysvinit:
+                  httpd:
+                    enabled: 'true'
+                    ensureRunning: 'true'
+
+
+    #elastic IP for the instance
+    MyEIP:
+      Type: AWS::EC2::EIP
+      Properties:
+        InstanceId: !Ref MyInstance
+
+    #Security Group
+    SSHSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Allow SSH and Http
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: 0.0.0.0/0
+          - IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+            CidrIp: 0.0.0.0/0
+
+              
